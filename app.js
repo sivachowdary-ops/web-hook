@@ -81,6 +81,37 @@ async function saveLead(phoneNumber, leadType, requirement) {
     console.error(error);
   }
 }
+async function saveBooking(
+  phoneNumber,
+  leadType,
+  slot
+) {
+  try {
+    const { error } = await supabase
+      .from('bookings')
+      .insert([
+        {
+          phone_number: phoneNumber,
+          lead_type: leadType,
+          slot_selected: slot
+        }
+      ]);
+
+    if (error) {
+      console.error(
+        'Booking Error:',
+        error
+      );
+    } else {
+      console.log(
+        'Booking saved'
+      );
+    }
+  } catch (error) {
+    console.error(error);
+  }
+}
+
 // Create or Update Session
 async function setUserSession(
   phoneNumber,
@@ -426,6 +457,47 @@ if (
       'EVENT_RECEIVED'
     );
   }
+if (
+  session &&
+  session.current_step === 'awaiting_slot_selection'
+) {
+  const slots = {
+    '1': 'Today - 5:00 PM',
+    '2': 'Today - 6:00 PM',
+    '3': 'Tomorrow - 11:00 AM',
+    '4': 'Tomorrow - 4:00 PM'
+  };
+
+  const selectedSlot =
+    slots[message.trim()];
+
+  if (!selectedSlot) {
+    await sendWhatsAppMessage(
+      sender,
+      'Please select 1, 2, 3 or 4.'
+    );
+
+    return res.status(200).send(
+      'EVENT_RECEIVED'
+    );
+  }
+
+  await saveBooking(
+    sender,
+    session.lead_type,
+    selectedSlot
+  );
+
+  await sendWhatsAppMessage(
+    sender,
+    `Perfect! Your consultation has been scheduled for ${selectedSlot}. Our team will contact you shortly.`
+  );
+
+  return res.status(200).send(
+    'EVENT_RECEIVED'
+  );
+}
+
 
   await sendWhatsAppMessage(
     sender,
