@@ -310,82 +310,78 @@ if (message) {
   console.log('Message:', message);
 
   // If waiting for user's name
-  if (
-    session &&
-    session.current_step === 'awaiting_name'
-  ) {
-    const { error } = await supabase
-      .from('qualified_leads')
-      .upsert([
-        {
-          phone_number: sender,
-          name: message,
-          lead_type: session.lead_type
-        }
-      ]);
+if (
+  session &&
+  session.current_step === 'awaiting_name'
+) {
+  const { error } = await supabase
+    .from('qualified_leads')
+    .upsert([
+      {
+        phone_number: sender,
+        name: message,
+        lead_type: session.lead_type
+      }
+    ]);
 
-    if (error) {
-      console.error(
-        'Qualified Lead Error:',
-        error
-      );
-    }
-
-    await setUserSession(
-      sender,
-      'awaiting_business_name',
-      session.lead_type
-    );
-
-    await sendWhatsAppMessage(
-      sender,
-      'Thank you. What is your business name?'
-    );
-
-    return res.status(200).send(
-      'EVENT_RECEIVED'
+  if (error) {
+    console.error(
+      'Qualified Lead Error:',
+      error
     );
   }
 
-  const aiResponse =
-    await getGeminiResponse(message);
-
-  console.log(
-    'AI Response:',
-    aiResponse
-  );
-
-  await saveConversation(
+  await setUserSession(
     sender,
-    message,
-    aiResponse
+    'awaiting_business_name',
+    session.lead_type
   );
 
-  const leadType =
-    detectLead(message);
+  await sendWhatsAppMessage(
+    sender,
+    'Thank you. What is your business name?'
+  );
 
-  if (leadType) {
-    await saveLead(
-      sender,
-      leadType,
-      message
-    );
+  return res.status(200).send(
+    'EVENT_RECEIVED'
+  );
+}
 
-    await setUserSession(
-      sender,
-      'awaiting_name',
-      leadType
-    );
+if (
+  session &&
+  session.current_step === 'awaiting_business_name'
+) {
+  const { error } = await supabase
+    .from('qualified_leads')
+    .update({
+      business_name: message
+    })
+    .eq('phone_number', sender);
 
-    await sendWhatsAppMessage(
-      sender,
-      'I would be happy to help. Before we proceed, may I know your name?'
-    );
-
-    return res.status(200).send(
-      'EVENT_RECEIVED'
+  if (error) {
+    console.error(
+      'Business Name Error:',
+      error
     );
   }
+
+  await setUserSession(
+    sender,
+    'awaiting_call_confirmation',
+    session.lead_type
+  );
+
+  await sendWhatsAppMessage(
+    sender,
+    'Thank you. Would you like to schedule a free consultation call with our team? Reply YES or NO.'
+  );
+
+  return res.status(200).send(
+    'EVENT_RECEIVED'
+  );
+}
+
+
 
   await sendWhatsAppMessage(
     sender,
