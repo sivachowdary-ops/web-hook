@@ -65,32 +65,56 @@ async function saveConversation(phoneNumber, userMessage, aiResponse) {
 }
 
 // Gemini Function
+// Gemini Function with retry + model fallback
+async function callGemini(model, userMessage) {
+  const response = await axios.post(
+    "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + process.env.GEMINI_API_KEY,
+    {
+      contents: [
+        {
+          parts: [
+            {
+              text: BUSINESS_CONTEXT + "\n\nUser Message: " + userMessage
+            }
+          ]
+        }
+      ]
+    }
+  );
+  return response.data.candidates[0].content.parts[0].text;
+}
+
 async function getGeminiResponse(userMessage) {
-  try {
-    const response = await axios.post(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + process.env.GEMINI_API_KEY,
-      {
-        contents: [
-          {
-            parts: [
-              {
-                text: BUSINESS_CONTEXT + "\n\nUser Message: " + userMessage
-              }
-            ]
-          }
-        ]
+  const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-lite'];
+
+  for (let i = 0; i < models.length; i++) {
+    const model = models[i];
+    try {
+      const result = await callGemini(model, userMessage);
+      console.log('Success with model: ' + model);
+      return result;
+    } catch (error) {
+      const status = error.response?.data?.error?.status;
+      const isOverloaded = status === 'UNAVAILABLE' || error.response?.status === 503;
+
+      console.error(
+        'Gemini Error with ' + model + ':',
+        error.response?.data || error.message
+      );
+
+      if (isOverloaded && i < models.length - 1) {
+        console.log('Model ' + model + ' overloaded, trying next model...');
+        continue;
       }
-    );
 
-    return response.data.candidates[0].content.parts[0].text;
-  } catch (error) {
-    console.error(
-      'Gemini Error:',
-      error.response?.data || error.message
-    );
-
-    return 'Sorry, I am having trouble responding right now. Please try again later.';
+      if (!isOverloaded) {
+        // Non-overload error (bad key, bad request, etc.) — no point trying other models
+        break;
+      }
+    }
   }
+
+  return 'Sorry, I am having trouble responding right now. Please try again in a moment.';
 }
 
 // Send WhatsApp Message
