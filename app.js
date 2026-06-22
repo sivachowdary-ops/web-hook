@@ -508,10 +508,51 @@ if (
     'EVENT_RECEIVED'
   );
 }
+const aiResponse =
+  await getGeminiResponse(message);
+
+console.log(
+  'AI Response:',
+  aiResponse
+);
+
+await saveConversation(
+  sender,
+  message,
+  aiResponse
+);
+
+const leadType =
+  detectLead(message);
+
+if (leadType) {
+  await saveLead(
+    sender,
+    leadType,
+    message
+  );
+
+  await setUserSession(
+    sender,
+    'awaiting_name',
+    leadType
+  );
+
   await sendWhatsAppMessage(
     sender,
-    aiResponse
+    'I would be happy to help. Before we proceed, may I know your name?'
   );
+
+  return res.status(200).send(
+    'EVENT_RECEIVED'
+  );
+}
+
+await sendWhatsAppMessage(
+  sender,
+  aiResponse
+);
+
 }
 res.status(200).send(
   'EVENT_RECEIVED'
