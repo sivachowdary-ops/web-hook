@@ -1,4 +1,4 @@
-```javascript
+
 const express = require('express');
 const axios = require('axios');
 const { createClient } = require('@supabase/supabase-js');
@@ -305,5 +305,4 @@ app.listen(port, () => {
     'Listening on port ' + port
   );
 });
-```
 
