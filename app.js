@@ -392,9 +392,10 @@ if (message) {
     aiResponse
   );
 }
-
-
- 
+res.status(200).send(
+  'EVENT_RECEIVED'
+);
+});
 // Start Server
 app.listen(port, () => {
   console.log(
