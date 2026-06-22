@@ -380,9 +380,62 @@ if (
     'EVENT_RECEIVED'
   );
 }
+if (
+  session &&
+  session.current_step === 'awaiting_call_confirmation'
+) {
+  const reply = message.trim().toLowerCase();
 
+  if (
+    reply === 'yes' ||
+    reply === 'y'
+  ) {
+    await supabase
+      .from('qualified_leads')
+      .update({
+        call_requested: true
+      })
+      .eq('phone_number', sender);
 
+    await setUserSession(
+      sender,
+      'awaiting_slot_selection',
+      session.lead_type
+    );
 
+    await sendWhatsAppMessage(
+      sender,
+      'Great! Here are our next available slots:\n\n1. Today - 5:00 PM\n2. Today - 6:00 PM\n3. Tomorrow - 11:00 AM\n4. Tomorrow - 4:00 PM\n\nReply with 1, 2, 3 or 4.'
+    );
+
+    return res.status(200).send(
+      'EVENT_RECEIVED'
+    );
+  }
+
+  if (
+    reply === 'no' ||
+    reply === 'n'
+  ) {
+    await sendWhatsAppMessage(
+      sender,
+      'No problem. If you would like a consultation later, just let us know.'
+    );
+
+    return res.status(200).send(
+      'EVENT_RECEIVED'
+    );
+  }
+
+  await sendWhatsAppMessage(
+    sender,
+    'Please reply YES or NO.'
+  );
+
+  return res.status(200).send(
+    'EVENT_RECEIVED'
+  );
+}
   await sendWhatsAppMessage(
     sender,
     aiResponse
