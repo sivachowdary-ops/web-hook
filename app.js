@@ -1,11 +1,7 @@
-```javascript
 const express = require('express');
 const axios = require('axios');
-
 const app = express();
-
 app.use(express.json());
-
 const port = process.env.PORT || 3000;
 const verifyToken = process.env.VERIFY_TOKEN;
 
@@ -13,7 +9,7 @@ const verifyToken = process.env.VERIFY_TOKEN;
 async function getGeminiResponse(userMessage) {
   try {
     const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
         contents: [
           {
@@ -26,14 +22,12 @@ async function getGeminiResponse(userMessage) {
         ]
       }
     );
-
     return response.data.candidates[0].content.parts[0].text;
   } catch (error) {
     console.error(
       "Gemini Error:",
       error.response?.data || error.message
     );
-
     return "Sorry, I'm having trouble responding right now.";
   }
 }
@@ -57,7 +51,6 @@ async function sendWhatsAppMessage(to, message) {
         }
       }
     );
-
     console.log("Reply sent successfully");
   } catch (error) {
     console.error(
@@ -74,7 +67,6 @@ app.get('/', (req, res) => {
     'hub.challenge': challenge,
     'hub.verify_token': token
   } = req.query;
-
   if (mode === 'subscribe' && token === verifyToken) {
     console.log('WEBHOOK VERIFIED');
     res.status(200).send(challenge);
@@ -86,27 +78,20 @@ app.get('/', (req, res) => {
 // Incoming WhatsApp Messages
 app.post('/', async (req, res) => {
   console.log(JSON.stringify(req.body, null, 2));
-
   const message =
     req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body;
-
   const sender =
     req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from;
-
   if (message) {
     console.log('Sender:', sender);
     console.log('Message:', message);
-
     const aiResponse = await getGeminiResponse(message);
-
     console.log('AI Response:', aiResponse);
-
     await sendWhatsAppMessage(
       sender,
       aiResponse
     );
   }
-
   res.status(200).send('EVENT_RECEIVED');
 });
 
@@ -114,5 +99,3 @@ app.post('/', async (req, res) => {
 app.listen(port, () => {
   console.log(`Listening on port ${port}`);
 });
-```
-
