@@ -1,18 +1,44 @@
-// Import Express.js
+```javascript
 const express = require('express');
 const axios = require('axios');
 
-// Create an Express app
 const app = express();
 
-// Middleware to parse JSON bodies
 app.use(express.json());
 
-// Set port and verify_token
 const port = process.env.PORT || 3000;
 const verifyToken = process.env.VERIFY_TOKEN;
 
-// Function to send WhatsApp message
+// Gemini Function
+async function getGeminiResponse(userMessage) {
+  try {
+    const response = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        contents: [
+          {
+            parts: [
+              {
+                text: userMessage
+              }
+            ]
+          }
+        ]
+      }
+    );
+
+    return response.data.candidates[0].content.parts[0].text;
+  } catch (error) {
+    console.error(
+      "Gemini Error:",
+      error.response?.data || error.message
+    );
+
+    return "Sorry, I'm having trouble responding right now.";
+  }
+}
+
+// Send WhatsApp Message
 async function sendWhatsAppMessage(to, message) {
   try {
     await axios.post(
@@ -41,7 +67,7 @@ async function sendWhatsAppMessage(to, message) {
   }
 }
 
-// Route for GET requests
+// Webhook Verification
 app.get('/', (req, res) => {
   const {
     'hub.mode': mode,
@@ -57,7 +83,7 @@ app.get('/', (req, res) => {
   }
 });
 
-// Route for POST requests
+// Incoming WhatsApp Messages
 app.post('/', async (req, res) => {
   console.log(JSON.stringify(req.body, null, 2));
 
@@ -71,16 +97,22 @@ app.post('/', async (req, res) => {
     console.log('Sender:', sender);
     console.log('Message:', message);
 
+    const aiResponse = await getGeminiResponse(message);
+
+    console.log('AI Response:', aiResponse);
+
     await sendWhatsAppMessage(
       sender,
-      'Hello from Astra AI Solutions!'
+      aiResponse
     );
   }
 
   res.status(200).send('EVENT_RECEIVED');
 });
 
-// Start the server
+// Start Server
 app.listen(port, () => {
   console.log(`Listening on port ${port}`);
 });
+```
+
