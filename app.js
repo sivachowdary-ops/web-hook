@@ -81,6 +81,49 @@ async function saveLead(phoneNumber, leadType, requirement) {
     console.error(error);
   }
 }
+// Create or Update Session
+async function setUserSession(
+  phoneNumber,
+  currentStep,
+  leadType = null
+) {
+  try {
+    const { error } = await supabase
+      .from('user_sessions')
+      .upsert([
+        {
+          phone_number: phoneNumber,
+          current_step: currentStep,
+          lead_type: leadType
+        }
+      ]);
+
+    if (error) {
+      console.error('Session Error:', error);
+    }
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Get Session
+async function getUserSession(phoneNumber) {
+  try {
+    const { data, error } = await supabase
+      .from('user_sessions')
+      .select('*')
+      .eq('phone_number', phoneNumber)
+      .single();
+
+    if (error) {
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    return null;
+  }
+}
 
 // Lead Detection
 function detectLead(message) {
@@ -258,47 +301,100 @@ app.post('/', async (req, res) => {
   const sender =
     req.body.entry?.[0]?.changes?.[0]
       ?.value?.messages?.[0]?.from;
+  
+  const session = await getUserSession(sender);
 
-  if (message) {
-    console.log('Sender:', sender);
-    console.log('Message:', message);
 
-    const aiResponse =
-      await getGeminiResponse(message);
+if (message) {
+  console.log('Sender:', sender);
+  console.log('Message:', message);
 
-    console.log(
-      'AI Response:',
-      aiResponse
-    );
+  // If waiting for user's name
+  if (
+    session &&
+    session.current_step === 'awaiting_name'
+  ) {
+    const { error } = await supabase
+      .from('qualified_leads')
+      .upsert([
+        {
+          phone_number: sender,
+          name: message,
+          lead_type: session.lead_type
+        }
+      ]);
 
-    await saveConversation(
-      sender,
-      message,
-      aiResponse
-    );
-
-    const leadType =
-      detectLead(message);
-
-    if (leadType) {
-      await saveLead(
-        sender,
-        leadType,
-        message
+    if (error) {
+      console.error(
+        'Qualified Lead Error:',
+        error
       );
     }
 
+    await setUserSession(
+      sender,
+      'awaiting_business_name',
+      session.lead_type
+    );
+
     await sendWhatsAppMessage(
       sender,
-      aiResponse
+      'Thank you. What is your business name?'
+    );
+
+    return res.status(200).send(
+      'EVENT_RECEIVED'
     );
   }
 
-  res.status(200).send(
-    'EVENT_RECEIVED'
-  );
-});
+  const aiResponse =
+    await getGeminiResponse(message);
 
+  console.log(
+    'AI Response:',
+    aiResponse
+  );
+
+  await saveConversation(
+    sender,
+    message,
+    aiResponse
+  );
+
+  const leadType =
+    detectLead(message);
+
+  if (leadType) {
+    await saveLead(
+      sender,
+      leadType,
+      message
+    );
+
+    await setUserSession(
+      sender,
+      'awaiting_name',
+      leadType
+    );
+
+    await sendWhatsAppMessage(
+      sender,
+      'I would be happy to help. Before we proceed, may I know your name?'
+    );
+
+    return res.status(200).send(
+      'EVENT_RECEIVED'
+    );
+  }
+
+  await sendWhatsAppMessage(
+    sender,
+    aiResponse
+  );
+}
+
+
+ 
 // Start Server
 app.listen(port, () => {
   console.log(
