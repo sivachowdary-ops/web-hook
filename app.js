@@ -1,5 +1,6 @@
 // Import Express.js
 const express = require('express');
+const axios = require('axios');
 
 // Create an Express app
 const app = express();
@@ -11,9 +12,42 @@ app.use(express.json());
 const port = process.env.PORT || 3000;
 const verifyToken = process.env.VERIFY_TOKEN;
 
+// Function to send WhatsApp message
+async function sendWhatsAppMessage(to, message) {
+  try {
+    await axios.post(
+      `https://graph.facebook.com/v23.0/${process.env.PHONE_NUMBER_ID}/messages`,
+      {
+        messaging_product: "whatsapp",
+        to: to,
+        text: {
+          body: message
+        }
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+          "Content-Type": "application/json"
+        }
+      }
+    );
+
+    console.log("Reply sent successfully");
+  } catch (error) {
+    console.error(
+      "Error sending message:",
+      error.response?.data || error.message
+    );
+  }
+}
+
 // Route for GET requests
 app.get('/', (req, res) => {
-  const { 'hub.mode': mode, 'hub.challenge': challenge, 'hub.verify_token': token } = req.query;
+  const {
+    'hub.mode': mode,
+    'hub.challenge': challenge,
+    'hub.verify_token': token
+  } = req.query;
 
   if (mode === 'subscribe' && token === verifyToken) {
     console.log('WEBHOOK VERIFIED');
@@ -24,7 +58,7 @@ app.get('/', (req, res) => {
 });
 
 // Route for POST requests
-app.post('/', (req, res) => {
+app.post('/', async (req, res) => {
   console.log(JSON.stringify(req.body, null, 2));
 
   const message =
@@ -36,6 +70,11 @@ app.post('/', (req, res) => {
   if (message) {
     console.log('Sender:', sender);
     console.log('Message:', message);
+
+    await sendWhatsAppMessage(
+      sender,
+      'Hello from Astra AI Solutions!'
+    );
   }
 
   res.status(200).send('EVENT_RECEIVED');
@@ -43,5 +82,5 @@ app.post('/', (req, res) => {
 
 // Start the server
 app.listen(port, () => {
-  console.log(`\nListening on port ${port}\n`);
+  console.log(`Listening on port ${port}`);
 });
