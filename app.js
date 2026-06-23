@@ -448,7 +448,7 @@ return res.status(200).send(
   'EVENT_RECEIVED'
 );
 
-
+}
     // STEP 5: Normal AI Chat
     const aiResponse = await getGeminiResponse(message);
 
