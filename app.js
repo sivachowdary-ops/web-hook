@@ -334,234 +334,200 @@ app.post('/', async (req, res) => {
       ?.value?.messages?.[0]?.from;
   
   const session = await getUserSession(sender);
-
-
 if (message) {
   console.log('Sender:', sender);
   console.log('Message:', message);
 
-  // If waiting for user's name
-if (
-  session &&
-  session.current_step === 'awaiting_name'
-) {
-  const { error } = await supabase
-    .from('qualified_leads')
-    .upsert([
-      {
-        phone_number: sender,
-        name: message,
-        lead_type: session.lead_type
-      }
-    ]);
-
-  if (error) {
-    console.error(
-      'Qualified Lead Error:',
-      error
-    );
-  }
-
-  await setUserSession(
-    sender,
-    'awaiting_business_name',
-    session.lead_type
-  );
-
-  await sendWhatsAppMessage(
-    sender,
-    'Thank you. What is your business name?'
-  );
-
-  return res.status(200).send(
-    'EVENT_RECEIVED'
-  );
-}
-
-if (
-  session &&
-  session.current_step === 'awaiting_business_name'
-) {
-  const { error } = await supabase
-    .from('qualified_leads')
-    .update({
-      business_name: message
-    })
-    .eq('phone_number', sender);
-
-  if (error) {
-    console.error(
-      'Business Name Error:',
-      error
-    );
-  }
-
-  await setUserSession(
-    sender,
-    'awaiting_call_confirmation',
-    session.lead_type
-  );
-
-  await sendWhatsAppMessage(
-    sender,
-    'Thank you. Would you like to schedule a free consultation call with our team? Reply YES or NO.'
-  );
-
-  return res.status(200).send(
-    'EVENT_RECEIVED'
-  );
-}
-if (
-  session &&
-  session.current_step === 'awaiting_call_confirmation'
-) {
-  const reply = message.trim().toLowerCase();
-
+  // STEP 1: Capture Name
   if (
-    reply === 'yes' ||
-    reply === 'y'
+    session &&
+    session.current_step === 'awaiting_name'
   ) {
-    await supabase
+    const { error } = await supabase
       .from('qualified_leads')
-      .update({
-        call_requested: true
-      })
-      .eq('phone_number', sender);
+      .upsert([
+        {
+          phone_number: sender,
+          name: message,
+          lead_type: session.lead_type
+        }
+      ]);
+
+    if (error) {
+      console.error('Qualified Lead Error:', error);
+    }
 
     await setUserSession(
       sender,
-      'awaiting_slot_selection',
+      'awaiting_business_name',
       session.lead_type
     );
 
     await sendWhatsAppMessage(
       sender,
-      'Great! Here are our next available slots:\n\n1. Today - 5:00 PM\n2. Today - 6:00 PM\n3. Tomorrow - 11:00 AM\n4. Tomorrow - 4:00 PM\n\nReply with 1, 2, 3 or 4.'
+      'Thank you. What is your business name?'
     );
 
-    return res.status(200).send(
-      'EVENT_RECEIVED'
-    );
+    return res.status(200).send('EVENT_RECEIVED');
   }
 
+  // STEP 2: Capture Business Name
   if (
-    reply === 'no' ||
-    reply === 'n'
+    session &&
+    session.current_step === 'awaiting_business_name'
   ) {
+    const { error } = await supabase
+      .from('qualified_leads')
+      .update({
+        business_name: message
+      })
+      .eq('phone_number', sender);
+
+    if (error) {
+      console.error('Business Name Error:', error);
+    }
+
+    await setUserSession(
+      sender,
+      'awaiting_call_confirmation',
+      session.lead_type
+    );
+
     await sendWhatsAppMessage(
       sender,
-      'No problem. If you would like a consultation later, just let us know.'
+      'Would you like to schedule a free consultation call with our team? Reply YES or NO.'
     );
 
-    return res.status(200).send(
-      'EVENT_RECEIVED'
-    );
+    return res.status(200).send('EVENT_RECEIVED');
   }
-if (
-  session &&
-  session.current_step === 'awaiting_slot_selection'
-) {
-  const slots = {
-    '1': 'Today - 5:00 PM',
-    '2': 'Today - 6:00 PM',
-    '3': 'Tomorrow - 11:00 AM',
-    '4': 'Tomorrow - 4:00 PM'
-  };
 
-  const selectedSlot =
-    slots[message.trim()];
+  // STEP 3: YES / NO
+  if (
+    session &&
+    session.current_step === 'awaiting_call_confirmation'
+  ) {
+    const reply = message.trim().toLowerCase();
 
-  if (!selectedSlot) {
+    if (reply === 'yes' || reply === 'y') {
+      await supabase
+        .from('qualified_leads')
+        .update({
+          call_requested: true
+        })
+        .eq('phone_number', sender);
+
+      await setUserSession(
+        sender,
+        'awaiting_slot_selection',
+        session.lead_type
+      );
+
+      await sendWhatsAppMessage(
+        sender,
+        'Great! Here are our next available slots:\n\n1. Today - 5:00 PM\n2. Today - 6:00 PM\n3. Tomorrow - 11:00 AM\n4. Tomorrow - 4:00 PM\n\nReply with 1, 2, 3 or 4.'
+      );
+
+      return res.status(200).send('EVENT_RECEIVED');
+    }
+
+    if (reply === 'no' || reply === 'n') {
+      await sendWhatsAppMessage(
+        sender,
+        'No problem. Reach out anytime if you would like a consultation.'
+      );
+
+      return res.status(200).send('EVENT_RECEIVED');
+    }
+
     await sendWhatsAppMessage(
       sender,
-      'Please select 1, 2, 3 or 4.'
+      'Please reply YES or NO.'
     );
 
-    return res.status(200).send(
-      'EVENT_RECEIVED'
-    );
+    return res.status(200).send('EVENT_RECEIVED');
   }
 
-  await saveBooking(
-    sender,
-    session.lead_type,
-    selectedSlot
-  );
+  // STEP 4: Slot Selection
+  if (
+    session &&
+    session.current_step === 'awaiting_slot_selection'
+  ) {
+    const slots = {
+      '1': 'Today - 5:00 PM',
+      '2': 'Today - 6:00 PM',
+      '3': 'Tomorrow - 11:00 AM',
+      '4': 'Tomorrow - 4:00 PM'
+    };
 
-  await sendWhatsAppMessage(
-    sender,
-    `Perfect! Your consultation has been scheduled for ${selectedSlot}. Our team will contact you shortly.`
-  );
+    const selectedSlot =
+      slots[message.trim()];
 
-  return res.status(200).send(
-    'EVENT_RECEIVED'
-  );
-}
+    if (!selectedSlot) {
+      await sendWhatsAppMessage(
+        sender,
+        'Please select 1, 2, 3 or 4.'
+      );
 
+      return res.status(200).send('EVENT_RECEIVED');
+    }
 
-  await sendWhatsAppMessage(
-    sender,
-    'Please reply YES or NO.'
-  );
+    await saveBooking(
+      sender,
+      session.lead_type,
+      selectedSlot
+    );
 
-  return res.status(200).send(
-    'EVENT_RECEIVED'
-  );
-}
-const aiResponse =
-  await getGeminiResponse(message);
+    await sendWhatsAppMessage(
+      sender,
+      `Perfect! Your consultation has been scheduled for ${selectedSlot}. Our team will contact you shortly.`
+    );
 
-console.log(
-  'AI Response:',
-  aiResponse
-);
+    return res.status(200).send('EVENT_RECEIVED');
+  }
 
-await saveConversation(
-  sender,
-  message,
-  aiResponse
-);
+  // STEP 5: Normal AI Chat
+  const aiResponse =
+    await getGeminiResponse(message);
 
-const leadType =
-  detectLead(message);
-
-if (leadType) {
-  await saveLead(
-    sender,
-    leadType,
-    message
-  );
-
-  await setUserSession(
-    sender,
-    'awaiting_name',
-    leadType
-  );
-
-  await sendWhatsAppMessage(
-    sender,
-    'I would be happy to help. Before we proceed, may I know your name?'
-  );
-
-  return res.status(200).send(
-    'EVENT_RECEIVED'
-  );
-}
-
-await sendWhatsAppMessage(
-  sender,
-  aiResponse
-);
-
-}
-res.status(200).send(
-  'EVENT_RECEIVED'
-);
-});
-// Start Server
-app.listen(port, () => {
   console.log(
-    'Listening on port ' + port
+    'AI Response:',
+    aiResponse
   );
-});
+
+  await saveConversation(
+    sender,
+    message,
+    aiResponse
+  );
+
+  const leadType =
+    detectLead(message);
+
+  if (leadType) {
+    await saveLead(
+      sender,
+      leadType,
+      message
+    );
+
+    await setUserSession(
+      sender,
+      'awaiting_name',
+      leadType
+    );
+
+    await sendWhatsAppMessage(
+      sender,
+      'I would be happy to help. Before we proceed, may I know your name?'
+    );
+
+    return res.status(200).send('EVENT_RECEIVED');
+  }
+
+  await sendWhatsAppMessage(
+    sender,
+    aiResponse
+  );
+}
+
 
