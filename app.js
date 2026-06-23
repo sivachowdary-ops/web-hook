@@ -413,18 +413,41 @@ app.post('/', async (req, res) => {
 
         return res.status(200).send('EVENT_RECEIVED');
       }
+await saveBooking(
+  sender,
+  session.lead_type,
+  selectedSlot
+);
 
-      await saveBooking(sender, session.lead_type, selectedSlot);
+// Clear session after successful booking
+const { error: sessionDeleteError } = await supabase
+  .from('user_sessions')
+  .delete()
+  .eq('phone_number', sender);
 
-      await sendWhatsAppMessage(
-        sender,
-        'Perfect! Your consultation has been scheduled for ' +
-          selectedSlot +
-          '. Our team will contact you shortly.'
-      );
+if (sessionDeleteError) {
+  console.error(
+    'Session Delete Error:',
+    sessionDeleteError
+  );
+} else {
+  console.log(
+    'Session cleared for:',
+    sender
+  );
+}
 
-      return res.status(200).send('EVENT_RECEIVED');
-    }
+await sendWhatsAppMessage(
+  sender,
+  'Perfect! Your consultation has been scheduled for ' +
+    selectedSlot +
+    '. Our team will contact you shortly.'
+);
+
+return res.status(200).send(
+  'EVENT_RECEIVED'
+);
+
 
     // STEP 5: Normal AI Chat
     const aiResponse = await getGeminiResponse(message);
